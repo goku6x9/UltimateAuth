@@ -32,7 +32,7 @@ namespace CodeBeam.UltimateAuth.Core.Extensions
         /// </summary>
         public static IServiceCollection AddUltimateAuth(this IServiceCollection services, IConfiguration configurationSection)
         {
-            services.Configure<UltimateAuthOptions>(configurationSection);
+            services.Configure<UAuthOptions>(configurationSection);
             return services.AddUltimateAuthInternal();
         }
 
@@ -41,7 +41,7 @@ namespace CodeBeam.UltimateAuth.Core.Extensions
         /// This is useful when settings are derived dynamically or are not stored
         /// in appsettings.json.
         /// </summary>
-        public static IServiceCollection AddUltimateAuth(this IServiceCollection services, Action<UltimateAuthOptions> configure)
+        public static IServiceCollection AddUltimateAuth(this IServiceCollection services, Action<UAuthOptions> configure)
         {
             services.Configure(configure);
             return services.AddUltimateAuthInternal();
@@ -54,14 +54,15 @@ namespace CodeBeam.UltimateAuth.Core.Extensions
         /// </summary>
         public static IServiceCollection AddUltimateAuth(this IServiceCollection services)
         {
-            services.Configure<UltimateAuthOptions>(_ => { });
+            services.Configure<UAuthOptions>(_ => { });
             return services.AddUltimateAuthInternal();
         }
 
         /// <summary>
         /// Internal shared registration pipeline invoked by all AddUltimateAuth overloads.
         /// Registers validators, user ID converters, and placeholder factories.
-        /// 
+        /// Core-level invariant validation.
+        /// Server layer may add additional validators.
         /// NOTE:
         /// This method does NOT register session stores or server-side services.
         /// A server project must explicitly call:
@@ -72,19 +73,16 @@ namespace CodeBeam.UltimateAuth.Core.Extensions
         /// </summary>
         private static IServiceCollection AddUltimateAuthInternal(this IServiceCollection services)
         {
-            services.AddSingleton<IValidateOptions<UltimateAuthOptions>, UltimateAuthOptionsValidator>();
-            services.AddSingleton<IValidateOptions<SessionOptions>, SessionOptionsValidator>();
-            services.AddSingleton<IValidateOptions<TokenOptions>, TokenOptionsValidator>();
-            services.AddSingleton<IValidateOptions<PkceOptions>, PkceOptionsValidator>();
-            services.AddSingleton<IValidateOptions<MultiTenantOptions>, MultiTenantOptionsValidator>();
+            services.AddSingleton<IValidateOptions<UAuthOptions>, UAuthOptionsValidator>();
+            services.AddSingleton<IValidateOptions<UAuthSessionOptions>, UAuthSessionOptionsValidator>();
+            services.AddSingleton<IValidateOptions<UAuthTokenOptions>, UAuthTokenOptionsValidator>();
+            services.AddSingleton<IValidateOptions<UAuthPkceOptions>, UAuthPkceOptionsValidator>();
+            services.AddSingleton<IValidateOptions<UAuthMultiTenantOptions>, UAuthMultiTenantOptionsValidator>();
 
-            // Binding of nested sub-options (Session, Token, etc.) is intentionally not done here.
-            // These must be bound at the server level to allow configuration per-environment.
+            // Nested options are bound automatically by the options binder.
+            // Server layer may override or extend these settings.
 
             services.AddSingleton<IUserIdConverterResolver, UAuthUserIdConverterResolver>();
-
-            // Default factory throws until a real session store is registered.
-            services.TryAddSingleton<ISessionStoreFactory, DefaultSessionStoreFactory>();
 
             return services;
         }
