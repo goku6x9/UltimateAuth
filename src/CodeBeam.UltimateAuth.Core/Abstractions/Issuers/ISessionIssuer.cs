@@ -1,4 +1,4 @@
-﻿using CodeBeam.UltimateAuth.Core.Contexts;
+﻿using CodeBeam.UltimateAuth.Core.Contracts;
 using CodeBeam.UltimateAuth.Core.Domain;
 
 namespace CodeBeam.UltimateAuth.Core.Abstractions
@@ -8,6 +8,6 @@ namespace CodeBeam.UltimateAuth.Core.Abstractions
     /// </summary>
     public interface ISessionIssuer<TUserId>
     {
-        Task<IssuedSession<TUserId>> IssueAsync(SessionIssueContext<TUserId> context, UAuthSessionChain<TUserId> chain, CancellationToken cancellationToken = default);
+        Task<IssuedSession<TUserId>> IssueAsync(AuthenticatedSessionContext<TUserId> context, ISessionChain<TUserId> chain, CancellationToken cancellationToken = default);
     }
 }
