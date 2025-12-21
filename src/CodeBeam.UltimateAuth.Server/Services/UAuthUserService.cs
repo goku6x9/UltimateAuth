@@ -1,89 +1,41 @@
 ﻿using CodeBeam.UltimateAuth.Core.Abstractions;
 using CodeBeam.UltimateAuth.Core.Contracts;
-using CodeBeam.UltimateAuth.Core.Infrastructure;
 
-namespace CodeBeam.UltimateAuth.Server.Users;
-
-internal sealed class UAuthUserService<TUserId> : IUAuthUserService<TUserId>
+namespace CodeBeam.UltimateAuth.Server.Users
 {
-    private readonly IUAuthUserStore<TUserId> _userStore;
-    private readonly IUAuthPasswordHasher _passwordHasher;
-    private readonly IUserIdFactory<TUserId> _userIdFactory;
-    private readonly IUserAuthenticator<TUserId> _authenticator;
-
-    public UAuthUserService(
-        IUAuthUserStore<TUserId> userStore,
-        IUAuthPasswordHasher passwordHasher,
-        IUserIdFactory<TUserId> userIdFactory,
-        IUserAuthenticator<TUserId> authenticator)
+    internal sealed class UAuthUserService<TUserId> : IUAuthUserService<TUserId>
     {
-        _userStore = userStore;
-        _passwordHasher = passwordHasher;
-        _userIdFactory = userIdFactory;
-        _authenticator = authenticator;
-    }
+        private readonly IUserAuthenticator<TUserId> _authenticator;
 
-    public async Task<TUserId> RegisterAsync(
-    RegisterUserRequest request,
-    CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(request.Identifier))
-            throw new ArgumentException("Username is required.");
+        public UAuthUserService(IUserAuthenticator<TUserId> authenticator)
+        {
+            _authenticator = authenticator;
+        }
 
-        if (string.IsNullOrWhiteSpace(request.Password))
-            throw new ArgumentException("Password is required.");
-
-        if (await _userStore.ExistsByUsernameAsync(request.Identifier, ct))
-            throw new InvalidOperationException("User already exists.");
-
-        var hash = _passwordHasher.Hash(request.Password);
-
-        var userId = _userIdFactory.Create();
-
-        await _userStore.CreateAsync(
-            new UserRecord<TUserId>
+        public async Task<UserAuthenticationResult<TUserId>> AuthenticateAsync(string? tenantId, string identifier, string secret, CancellationToken ct = default)
+        {
+            var context = new AuthenticationContext
             {
-                Id = userId,
-                Username = request.Identifier,
-                PasswordHash = hash,
-                CreatedAt = DateTimeOffset.UtcNow
-            },
-            ct);
+                Identifier = identifier,
+                Secret = secret,
+                CredentialType = "password"
+            };
 
-        return userId;
-    }
+            return await _authenticator.AuthenticateAsync(tenantId, context, ct);
+        }
 
-    public async Task<bool> ValidateCredentialsAsync(
-        ValidateCredentialsRequest request,
-        CancellationToken ct = default)
-    {
-        var user = await _userStore.FindByUsernameAsync(request.TenantId, request.Identifier, ct);
-        if (user is null)
-            return false;
+        // This method must not issue sessions or tokens
+        public async Task<bool> ValidateCredentialsAsync(ValidateCredentialsRequest request, CancellationToken ct = default)
+        {
+            var context = new AuthenticationContext
+            {
+                Identifier = request.Identifier,
+                Secret = request.Password,
+                CredentialType = "password"
+            };
 
-        return _passwordHasher.Verify(
-            request.Password,
-            user.PasswordHash);
-    }
-
-    public async Task DeleteAsync(
-        TUserId userId,
-        CancellationToken ct = default)
-    {
-        await _userStore.DeleteAsync(userId, ct);
-    }
-
-    public async Task<UserAuthenticationResult<TUserId>> AuthenticateAsync(
-        string? tenantId,
-        string identifier,
-        string secret,
-        CancellationToken cancellationToken = default)
-    {
-        return await _authenticator.AuthenticateAsync(
-            tenantId,
-            identifier,
-            secret,
-            cancellationToken);
+            var result = await _authenticator.AuthenticateAsync(request.TenantId,context, ct);
+            return result.Succeeded;
+        }
     }
 }
-
